@@ -1,5 +1,5 @@
 <div align="center">
-<h3> OmniGuard: Hybrid Manipulation Localization via Augmented Versatile Deep Image Watermarking </h3>
+<h1> OmniGuard: Hybrid Manipulation Localization via Augmented Versatile Deep Image Watermarking </h1>
 </div>
 
 ## Download Checkpoints of OmniGuard
