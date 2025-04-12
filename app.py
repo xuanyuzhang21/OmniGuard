@@ -31,12 +31,6 @@ import torch.nn.functional as F
 from torchvision.utils import save_image
 import torchvision
 
-from wam.watermark_anything.data.metrics import msg_predict_inference
-from wam.notebooks.inference_utils import (
-    load_model_from_checkpoint, default_transform, unnormalize_img
-)
-
-
 def img_to_base64(filepath):
     with open(filepath, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
@@ -46,7 +40,7 @@ logo_base64 = img_to_base64("logo.png")
 html_content = f"""
 <div style='display: flex; align-items: center; justify-content: center; padding: 20px;'>
     <img src='data:image/png;base64,{logo_base64}' alt='Logo' style='height: 50px; margin-right: 20px;'>
-    <strong><font size='8'>EditGuard<font></strong>
+    <strong><font size='8'>OmniGuard<font></strong>
 </div>
 """
 
@@ -96,50 +90,6 @@ def hiding(image_input, model):
 
     return container, container
 
-def WAM_hiding(image_input, model):
-
-    img_pt = default_transform(image_input).unsqueeze(0).to(device)  # [1, 3, H, W]
-    
-    # Embed the watermark message into the image
-    wm_msg = model.get_random_msg(1)
-    outputs = model.embed(img_pt, wm_msg)
-
-    img_w = outputs['imgs_w']
-
-    container =  unnormalize_img(img_w)
-    print(container.min(), container.max())
-    container = container.permute(0, 2, 3, 1).squeeze().detach().cpu().numpy()
-    container = np.clip(container, 0., 1.)
-    container = Image.fromarray((container * 255).astype(np.uint8))
-
-    # container.save("temp1.png")
-    
-
-    return container, container
-
-def WAM_revealing(image_input, model_list, model):
-
-    image_input = image_input / 255.
-    image_input = torch.from_numpy(image_input).permute(2,0,1).unsqueeze(0).float().to(device)
-
-    preds = model.detect(image_input)["preds"]  # [1, 33, 256, 256]
-    mask_preds = F.sigmoid(preds[:, 0, :, :])  # [1, 256, 256], predicted mask
-    bit_preds = preds[:, 1:, :, :]  # [1, 32, 256, 256], predicted bits
-    
-    # Predict the embedded message and calculate bit accuracy
-    pred_message = msg_predict_inference(bit_preds, mask_preds).cpu().float()  # [1, 32]
-
-    # Save the watermarked image and the detection mask
-    
-    mask_preds_res = F.interpolate(mask_preds.unsqueeze(1), size=(image_input.shape[-2], image_input.shape[-1]), mode="bilinear", align_corners=False)  # [1, 1, H, W]
-    save_image(mask_preds_res, f"mask_pred.png")
-
-    mask = mask_preds_res.permute(0, 2, 3, 1).cpu().squeeze().detach().numpy() * 255
-    mask = 255. - mask
-    mask = Image.fromarray(mask.astype(np.uint8))
-
-    return mask
-
 def rand(num_bits=100):
     random_str = ''.join([str(random.randint(0, 1)) for _ in range(num_bits)])
     return random_str
@@ -179,22 +129,6 @@ def wam_model_select(ckp_index=0):
     print("zxy", wam)
     
     return wam
-
-# def revealing(image_edited, input_bit, model_list, model):
-
-#     steg = image_edited / 255.
-#     steg = torch.from_numpy(steg).permute(2,0,1).unsqueeze(0).float().to(device)
-    
-#     mask, remesg = EditGuard_Reveal(model, steg)
-#     mask = mask.permute(0, 2, 3, 1).cpu().squeeze().numpy() * 255
-#     mask = Image.fromarray(mask.astype(np.uint8))
-
-#     remesg = (remesg > 0).int()
-#     binary_string = ''.join(str(x.item()) for x in remesg.flatten())
-    
-#     # bit_acc = 1 - calculate_ber(input_bit, binary_string)
-
-#     return mask
 
 def revealing(image_edited, model_list, model):
 
@@ -247,7 +181,7 @@ def calculate_ber(string1, string2):
 
 
 # Description
-title = "<center><strong><font size='8'>EditGuard<font></strong></center>"
+title = "<center><strong><font size='8'>OmniGuard<font></strong></center>"
 
 css = "h1 { text-align: center } .about { text-align: justify; padding-left: 10%; padding-right: 10%; }"
 
@@ -282,9 +216,6 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                     with gr.Row():
                         with gr.Column():
                             image_input = gr.Image(source='upload', label="原始图片", interactive=True, type="numpy", value=default_example[0])
-                            # with gr.Row():
-                                # bit_input = gr.Textbox(label="输入版权水印（100位比特序列）", placeholder="在这里输入...")
-                                # rand_bit = gr.Button("🎲 随机生成版权水印")
                             hiding_button = gr.Button("嵌入水印")
                         with gr.Column():
                             image_watermark = gr.Image(source="upload", label="带有水印的图片", interactive=True, type="numpy")
@@ -311,8 +242,6 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                             revealing_button = gr.Button("提取")
                         with gr.Column():
                             edit_mask = gr.Image(source='upload', label="编辑区域蒙版预测", interactive=True, type="numpy")
-                            # bit_output = gr.Textbox(label="版权水印预测")
-                            # acc_output = gr.Textbox(label="水印预测准确率")
                 
                 gr.Examples(
                             examples=examples,
@@ -326,93 +255,14 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                 hiding_button.click(
                     hiding, inputs=[image_input, model], outputs=[image_watermark, image_edit]
                     )
-                # rand_bit.click(
-                #     rand, inputs=[], outputs=[bit_input]
-                #     )
 
 
                 inpainting_button.click(
                     ImageEdit, inputs = [image_edit, text_prompt, inpainting_model_list], outputs=[image_edited, image_edited_1, save_inpainted_image]
                     )
 
-                # revealing_button.click(
-                #     revealing, inputs=[image_edited_1, bit_input, model_list, model], outputs=[edit_mask, bit_output, acc_output]
-                #     )
-
                 revealing_button.click(
                     revealing, inputs=[image_edited_1, model_list, model], outputs=[edit_mask]
-                    )
-        
-        
-        
-        with gr.TabItem('Watermark Anything'):
-
-            DESCRIPTION = """
-            ## 使用方法：
-            - 上传图像，点击"嵌入水印"按钮，生成带水印的图像。
-            - 涂抹要编辑的区域，并使用Inpainting算法编辑图像。
-            - 点击"提取"按钮检测篡改区域。"""
-            
-            gr.Markdown(DESCRIPTION)
-            save_inpainted_image_wam = gr.State(value=None)
-            with gr.Column():
-                with gr.Row():
-                    model_list_wam = gr.Dropdown(label="选择模型", choices=["模型1"], type = 'index')
-                    clear_button_wam = gr.Button("清除全部")
-                with gr.Box():
-                    gr.Markdown("# 1. 嵌入水印")
-                    with gr.Row():
-                        with gr.Column():
-                            image_input_wam = gr.Image(source='upload', label="原始图片", interactive=True, type="numpy", value=default_example[0])
-                            # with gr.Row():
-                                # bit_input = gr.Textbox(label="输入版权水印（100位比特序列）", placeholder="在这里输入...")
-                                # rand_bit = gr.Button("🎲 随机生成版权水印")
-                            hiding_button_wam = gr.Button("嵌入水印")
-                        with gr.Column():
-                            image_watermark_wam = gr.Image(source="upload", label="带有水印的图片", interactive=True, type="numpy")
-
-
-                with gr.Box():
-                    gr.Markdown("# 2. 篡改图片")
-                    with gr.Row():
-                        with gr.Column():
-                            image_edit_wam = gr.Image(source='upload',tool="sketch", label="选取篡改区域", interactive=True, type="numpy")
-                            inpainting_model_list_wam = gr.Dropdown(label="选择篡改模型", choices=["模型1：SD_inpainting"], type = 'index')
-                            text_prompt_wam = gr.Textbox(label="篡改提示词")
-                            inpainting_button_wam = gr.Button("篡改图片")
-                        with gr.Column():
-                            image_edited_wam = gr.Image(source="upload", label="篡改结果", interactive=True, type="numpy")
-                
-
-                with gr.Box():
-                    gr.Markdown("# 3. 提取水印&篡改区域")
-                    with gr.Row():
-                        with gr.Column():
-                            image_edited_1_wam = gr.Image(source="upload", label="待提取图片", interactive=True, type="numpy")
-                            
-                            revealing_button_wam = gr.Button("提取")
-                        with gr.Column():
-                            edit_mask_wam = gr.Image(source='upload', label="编辑区域蒙版预测", interactive=True, type="numpy")
-                
-                gr.Examples(
-                            examples=examples,
-                            inputs=[image_input],
-                        )
-
-
-                model_list_wam.change(
-                    wam_model_select, inputs = [model_list_wam], outputs=[model_wam]
-                    )
-                hiding_button_wam.click(
-                    WAM_hiding, inputs=[image_input_wam, model_wam], outputs=[image_watermark_wam, image_edit_wam]
-                    )
-
-                inpainting_button_wam.click(
-                    ImageEdit, inputs = [image_edit_wam, text_prompt_wam, inpainting_model_list_wam], outputs=[image_edited_wam, image_edited_1_wam, save_inpainted_image_wam]
-                    )
-
-                revealing_button_wam.click(
-                    WAM_revealing, inputs=[image_edited_1_wam, model_list_wam, model_wam], outputs=[edit_mask_wam]
                     )
 
 
