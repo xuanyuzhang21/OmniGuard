@@ -1,0 +1,8 @@
+torch
+torchvision
+timm
+kornia
+tqdm
+focal_frequency_loss
+accelerate
+diffusers
