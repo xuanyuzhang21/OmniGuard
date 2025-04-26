@@ -8,7 +8,7 @@ Our code is being open sourced step by step, and the complete training and testi
 
 ## Download Checkpoints of OmniGuard
 ```
-PKU Disk
+PKU Disk 
 https://disk.pku.edu.cn/link/AAB048898581E047DE9519CE140F991B3A
 文件名：checkpoint.zip
 有效期限：永久有效
